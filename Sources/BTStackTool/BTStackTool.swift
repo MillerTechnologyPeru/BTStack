@@ -20,6 +20,8 @@ struct BTStackTool {
     
     static let peripheral = BTStackPeripheral(hostController: hostController)
     
+    nonisolated(unsafe) static var lightState = false
+    
     static func main() {
         
         btstack_memory_init()
@@ -89,20 +91,62 @@ struct BTStackTool {
                     value: Array("BTStack BLE Peripheral".utf8),
                     permissions: .read,
                     properties: [.read]
+                ),
+            ]
+        ))
+        
+        let lightStateUUID = BluetoothUUID(rawValue: "6170CEE6-9E3A-47B5-A621-B8BF7EC843D2")!
+        
+        let (lightService, _) = peripheral.add(service: GATTAttribute<BTStackPeripheral.Data>.Service(
+            uuid: BluetoothUUID(rawValue: "A5E9C26D-2B6A-4F22-9A47-21FF43393188")!,
+            isPrimary: true,
+            characteristics: [
+                .init(
+                    uuid: lightStateUUID,
+                    value: [0x00],
+                    permissions: [.read, .write],
+                    properties: [.read, .write],
+                    descriptors: [
+                        .init(GATTUserDescription(rawValue: "Light State"))
+                    ]
                 )
             ]
         ))
-        defer {
-            peripheral.remove(service: serviceHandle)
-        }
-        // 
+        
+        // start advertisment
         try peripheral.start(options: .init(
             advertisingData: advertisement,
             scanResponse: scanResponse)
         )
         
-        while true {
-            Thread.sleep(forTimeInterval: 1.0)
+        peripheral.willWrite = { write in
+            switch write.uuid {
+            case lightStateUUID:
+                guard write.newValue.count == 1 else {
+                    return .writeNotPermitted
+                }
+                switch write.newValue[0] {
+                case 0, 1:
+                    return nil
+                default:
+                    return .writeNotPermitted
+                }
+            default:
+                return nil
+            }
+        }
+        
+        peripheral.didWrite = { write in
+            switch write.uuid {
+            case lightStateUUID:
+                let oldValue = lightState
+                let newState = write.value.first != 0
+                print("Light State: \(oldValue) -> \(newState)")
+                self.lightState = newState
+                
+            default:
+                break
+            }
         }
     }
 }
