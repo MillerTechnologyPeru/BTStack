@@ -15,13 +15,20 @@ public extension HostController {
         advIntMax: UInt16 = 0x0030,
         advType: UInt8 = 0,
         directAddressType: UInt8 = 0,
-        directAddress: inout BluetoothAddress,
+        directAddress: BluetoothAddress = .zero,
         channelMap: UInt8 = 0x07,
         filterPolicy: UInt8 = 0x00
     ) {
+        var directAddress = directAddress
         withUnsafeMutablePointer(to: &directAddress.bytes) {
             gap_advertisements_set_params(advIntMin, advIntMax, advType, directAddressType, $0, channelMap, filterPolicy)
         }
+    }
+    
+    var address: BluetoothAddress {
+        var address: BluetoothAddress = .zero
+        gap_local_bd_addr(&address.bytes)
+        return address.bigEndian
     }
 }
 

@@ -41,8 +41,7 @@ struct BTStackTool {
             Thread.sleep(forTimeInterval: 1.0)
         }
                 
-        var address: BluetoothAddress = .zero
-        hostController.setAdvertisementParameters(directAddress: &address)
+        hostController.setAdvertisementParameters()
         
         // Estimote iBeacon B9407F30-F5F8-466E-AFF9-25556B57FE6D
         // Major 0x01 Minor 0x01
@@ -52,6 +51,7 @@ struct BTStackTool {
         hostController.advertisement = .init(beacon: beacon, flags: flags)
 
         // scan response with name and bluetooth address
+        let address = hostController.address
         let name = GAPCompleteLocalName(name: "BTStack " + address.description)
         let scanResponse: LowEnergyAdvertisingData = GAPDataEncoder.encode(name)
         hostController.scanResponse = scanResponse
