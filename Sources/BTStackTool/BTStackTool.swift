@@ -14,24 +14,26 @@ import CBTStack
 @main
 struct BTStackTool {
     
-    static func main() throws {
+    static func main() {
         
+        btstack_memory_init()
+                
         btstack_run_loop_init(btstack_run_loop_posix_get_instance())
         defer {
             btstack_run_loop_deinit()
         }
-                
-        start()
         
-        while true {
-            btstack_run_loop_execute()
+        Thread.detachNewThread {
+            start()
         }
+        
+        btstack_run_loop_execute()
     }
     
     static func start() {
         
         let hostController = HostController.default
-        
+        hostController.log = { print($0) }
         hostController.setPower(.on)
         
         // wait for Bluetooth to turn on
@@ -55,6 +57,6 @@ struct BTStackTool {
         hostController.scanResponse = scanResponse
         hostController.isAdvertising = true
         
-        print("Advertisment Name: ", name.description)
+        print("Advertisment Name:", name.description)
     }
 }
