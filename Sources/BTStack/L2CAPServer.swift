@@ -59,7 +59,7 @@ public extension L2CAP {
             }
             return Connection(
                 handle: handle,
-                address: address,
+                address: address, // TODO: Remote address
                 destination: self.address
             )
         }

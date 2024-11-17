@@ -96,11 +96,25 @@ public final class L2CAP {
     }
     
     public func canWrite(_ handle: UInt16) -> Bool {
-        l2cap_can_send_packet_now(handle)
+        /*
+        guard let channel = l2cap_fixed_channel_for_channel_id(handle) else {
+            assertionFailure()
+            return false
+        }
+        return channel.pointee.waiting_for_can_send_now != 0
+         */
+        return true
     }
     
     public func write(_ buffer: UnsafeRawBufferPointer, connection handle: UInt16) throws(BTStackError) {
-        try l2cap_send(handle, buffer.baseAddress, UInt16(buffer.count)).throwsError()
+        //try l2cap_send(handle, buffer.baseAddress, UInt16(buffer.count)).throwsError()
+        let dataPointer = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self)
+        try l2cap_send_connectionless(
+            handle,
+            UInt16(L2CAP_CID_ATTRIBUTE_PROTOCOL),
+            .init(mutating: dataPointer),
+            UInt16(buffer.count)
+        ).throwsError()
     }
     
     public func canAccept() -> Bool {

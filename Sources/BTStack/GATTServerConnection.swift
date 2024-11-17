@@ -60,20 +60,26 @@ internal final class GATTServerConnection <Socket: L2CAPConnection>: @unchecked 
     
     /// Modify the value of a characteristic, optionally emiting notifications if configured on active connections.
     public func write(_ value: Data, forCharacteristic handle: UInt16) {
+        #if canImport(Foundation)
         lock.lock()
         defer { lock.unlock() }
+        #endif
         server.writeValue(value, forCharacteristic: handle)
     }
     
     public func run() throws(ATTConnectionError<Socket.Error, Socket.Data>) {
+        #if canImport(Foundation)
         lock.lock()
         defer { lock.unlock() }
+        #endif
         try self.server.run()
     }
     
     public subscript(handle: UInt16) -> Data {
+        #if canImport(Foundation)
         lock.lock()
         defer { lock.unlock() }
+        #endif
         return server.database[handle: handle].value
     }
 }
