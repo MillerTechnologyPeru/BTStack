@@ -438,6 +438,11 @@ slipif_poll(struct netif *netif)
   }
 }
 
+u32_t sio_tryread(sio_fd_t fd, u8_t *data, u32_t len)
+{
+  return 0;
+}
+
 #if SLIP_RX_FROM_ISR
 /**
  * @ingroup slipif

@@ -20,7 +20,7 @@
 #undef NTOHS
 
 #include <stdlib.h>
-#if defined(openbsd)
+#if defined(openbsd) || __APPLE__
 #include <util.h>
 #endif
 #include <termios.h>

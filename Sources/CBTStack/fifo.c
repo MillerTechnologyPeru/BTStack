@@ -9,6 +9,7 @@
 #include "lwip/sys.h"
 #include "lwip/arch.h"
 #include <unistd.h>
+#include "lwip/err.h"
 
 #ifndef TRUE
 #define TRUE  1

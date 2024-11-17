@@ -1,4 +1,4 @@
 module CBTStack {
-  header "btstack.h"
+  header "CBTStack.h"
   export *
 }
