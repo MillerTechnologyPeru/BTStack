@@ -10,7 +10,7 @@ import CBTStack
 
 public final class HostController {
     
-    public nonisolated(unsafe) static let `default` = HostController()
+    public nonisolated(unsafe) static let `default` = HostController(transport: .default)
     
     // MARK: - Properties
     
@@ -48,11 +48,9 @@ public final class HostController {
     
     // MARK: - Initialization
     
-    private init() {
+    internal init(transport: borrowing Transport) {
         // init BTStack
-        #if os(macOS) || os(Linux)
-        hci_init(hci_transport_usb_instance(), nil)
-        #endif
+        hci_init(transport.pointer, nil)
         // register for callbacks
         callbackRegistration.callback = _bluetooth_packet_handler
         hci_add_event_handler(&callbackRegistration)
@@ -65,8 +63,9 @@ public final class HostController {
     
     // MARK: - Methods
     
-    public func setPower(_ state: PowerState) {
-        hci_power_control(.init(rawValue: numericCast(state.rawValue)))
+    /// Requests the change of BTstack power mode.
+    public func setPower(_ state: PowerState) throws(BTStackError) {
+        try hci_power_control(.init(rawValue: numericCast(state.rawValue))).throwsError()
     }
 }
 
@@ -81,7 +80,7 @@ public extension HostController {
         case sleep  = 2
     }
 
-    enum State: UInt8 {
+    enum State: UInt8, Sendable {
 
         case off            = 0
         case initializing   = 1
@@ -98,7 +97,6 @@ public extension HostController {
 internal func _bluetooth_packet_handler(packetType: UInt8, channel: UInt16, packetPointer: UnsafeMutablePointer<UInt8>?, packetSize: UInt16) {
     
     let hostController = HostController.default
-    let log = hostController.log
     switch packetType {
         case UInt8(HCI_EVENT_PACKET):
             switch hci_event_packet_get_type(packetPointer) {

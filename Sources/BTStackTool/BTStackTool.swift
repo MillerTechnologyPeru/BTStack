@@ -24,17 +24,23 @@ struct BTStackTool {
         }
         
         Thread.detachNewThread {
-            start()
+            do {
+                try start()
+            }
+            catch {
+                print("Error \(error)")
+                exit(EXIT_FAILURE)
+            }
         }
         
         btstack_run_loop_execute()
     }
     
-    static func start() {
+    static func start() throws(BTStackError) {
         
         let hostController = HostController.default
         hostController.log = { print($0) }
-        hostController.setPower(.on)
+        try hostController.setPower(.on)
         
         // wait for Bluetooth to turn on
         while hostController.state != .on {
