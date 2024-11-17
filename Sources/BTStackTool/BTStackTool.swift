@@ -14,6 +14,12 @@ import CBTStack
 @main
 struct BTStackTool {
     
+    nonisolated(unsafe) static let hostController = HostController.default
+    
+    nonisolated(unsafe) static let l2cap = L2CAP.shared
+    
+    static let peripheral = BTStackPeripheral(hostController: hostController)
+    
     static func main() {
         
         btstack_memory_init()
@@ -22,6 +28,10 @@ struct BTStackTool {
         defer {
             btstack_run_loop_deinit()
         }
+        
+        hostController.log = { print("HCI:", $0) }
+        l2cap.log = { print("L2CAP:", $0) }
+        peripheral.log = { print("Peripheral:", $0) }
         
         Thread.detachNewThread {
             do {
@@ -36,11 +46,15 @@ struct BTStackTool {
         btstack_run_loop_execute()
     }
     
-    static func start() throws(BTStackError) {
+    static func start() throws(BTStackPeripheral.Error) {
         
         let hostController = HostController.default
-        hostController.log = { print("HCI:", $0) }
-        try hostController.setPower(.on)
+        do {
+            try hostController.setPower(.on)
+        }
+        catch {
+            throw .library(error)
+        }
         
         // wait for Bluetooth to turn on
         while hostController.state != .on {
@@ -54,21 +68,39 @@ struct BTStackTool {
         let uuid = UUID(uuidString: "B9407F30-F5F8-466E-AFF9-25556B57FE6D")!
         let beacon = AppleBeacon(uuid: uuid, major: 0x01, minor: 0x01, rssi: -10)
         let flags: GAPFlags = [.lowEnergyGeneralDiscoverableMode, .notSupportedBREDR]
-        hostController.advertisement = .init(beacon: beacon, flags: flags)
-
+        let advertisement = LowEnergyAdvertisingData(
+            beacon: beacon,
+            flags: flags
+        )
+        
         // scan response with name and bluetooth address
         let address = hostController.address
         let name = GAPCompleteLocalName(name: "BTStack " + address.description)
         let scanResponse: LowEnergyAdvertisingData = GAPDataEncoder.encode(name)
-        hostController.scanResponse = scanResponse
-        hostController.isAdvertising = true
         
         print("Advertisment Name:", name.description)
         
-        let l2cap = L2CAP.shared
-        l2cap.log = { print("L2CAP:", $0) }
-        l2cap.register(channel: 0x0004) // ATT
-        
+        // Add services
+        let (serviceHandle, _) = peripheral.add(service: GATTAttribute<BTStackPeripheral.Data>.Service(
+            uuid: .deviceInformation,
+            isPrimary: true,
+            characteristics: [
+                .init(
+                    uuid: .deviceName,
+                    value: Array("BTStack BLE Peripheral".utf8),
+                    permissions: .read,
+                    properties: [.read]
+                )
+            ]
+        ))
+        defer {
+            peripheral.remove(service: serviceHandle)
+        }
+        // 
+        try peripheral.start(options: .init(
+            advertisingData: advertisement,
+            scanResponse: scanResponse)
+        )
         
         while true {
             Thread.sleep(forTimeInterval: 1.0)

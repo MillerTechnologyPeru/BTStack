@@ -17,6 +17,13 @@ public struct BTStackError: Error, RawRepresentable, Equatable, Hashable, Sendab
     }
 }
 
+public extension BTStackError {
+    
+    init(_ hci: HCIError) {
+        self.init(rawValue: Int32(hci.rawValue))
+    }
+}
+
 public extension HCIError {
     
     init?(_ error: BTStackError) {

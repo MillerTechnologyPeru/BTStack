@@ -8,29 +8,35 @@
 import CBTStack
 import Bluetooth
 import BluetoothGATT
+import BluetoothHCI
 
 public final class L2CAP {
     
     public nonisolated(unsafe) static var shared = L2CAP()
     
-    internal var callbackRegistration = btstack_packet_callback_registration_t()
+    internal var l2capCallbackRegistration = btstack_packet_callback_registration_t()
     
-    internal var services = [UInt16: Service]()
-    
+    private var hciCallbackRegistration = btstack_packet_callback_registration_t()
+        
     public var log: (@Sendable (String) -> ())?
     
     internal fileprivate(set) var recievedData = [UInt16: [[UInt8]]]()
+    
+    internal fileprivate(set) var pendingConnections = [UInt16]()
     
     private init() {
         // Set up L2CAP and register L2CAP with HCI layer.
         l2cap_init()
         // register for callbacks
-        callbackRegistration.callback = _l2cap_packet_handler
-        l2cap_add_event_handler(&callbackRegistration)
+        l2capCallbackRegistration.callback = _l2cap_packet_handler
+        l2cap_add_event_handler(&l2capCallbackRegistration)
+        hciCallbackRegistration.callback = _l2cap_packet_handler
+        hci_add_event_handler(&hciCallbackRegistration)
     }
     
     deinit {
-        l2cap_remove_event_handler(&callbackRegistration)
+        l2cap_remove_event_handler(&l2capCallbackRegistration)
+        hci_remove_event_handler(&hciCallbackRegistration)
     }
     
     public var maxMTU: UInt16 {
@@ -42,8 +48,8 @@ public final class L2CAP {
         set { l2cap_set_max_le_mtu(newValue) }
     }
     
-    public func register(channel: UInt16) {
-        l2cap_register_fixed_channel(_l2cap_packet_handler, channel)
+    public func register(channel: ChannelIdentifier) {
+        l2cap_register_fixed_channel(_l2cap_packet_handler, channel.rawValue)
     }
     
     public func registerBREDR(
@@ -73,15 +79,15 @@ public final class L2CAP {
         try l2cap_disconnect(connection).throwsError()
     }
     
-    public func canRead(connection handle: UInt16) -> Bool {
+    public func canRead(_ handle: UInt16) -> Bool {
         self.recievedData[handle, default: []].isEmpty == false
     }
     
     public func read(length: Int = 23, connection handle: UInt16) -> [UInt8]? {
-        guard canRead(connection: handle) else {
+        guard canRead(handle) else {
             return nil
         }
-        return self.recievedData[handle, default: []].removeFirst()
+        return Array(self.recievedData[handle, default: []].removeFirst().prefix(length))
     }
     
     internal func recieved(_ connection: UInt16, _ buffer: UnsafeBufferPointer<UInt8>) {
@@ -89,37 +95,23 @@ public final class L2CAP {
         self.recievedData[connection, default: []].append(data)
     }
     
-    public func canWrite(connection handle: UInt16) -> Bool {
+    public func canWrite(_ handle: UInt16) -> Bool {
         l2cap_can_send_packet_now(handle)
     }
     
     public func write(_ buffer: UnsafeRawBufferPointer, connection handle: UInt16) throws(BTStackError) {
         try l2cap_send(handle, buffer.baseAddress, UInt16(buffer.count)).throwsError()
     }
-}
-
-public extension L2CAP {
     
-    final class Service {
-        
-        public let psm: UInt16
-        
-        fileprivate init(
-            psm: UInt16,
-            mtu: UInt16,
-            security: gap_security_level_t
-        ) {
-            self.psm = psm
-            l2cap_register_service(_l2cap_packet_handler, psm, mtu, security)
+    public func canAccept() -> Bool {
+        pendingConnections.isEmpty == false
+    }
+    
+    public func accept() -> UInt16? {
+        guard canAccept() else {
+            return nil
         }
-        
-        deinit {
-            close()
-        }
-        
-        public func close() {
-            l2cap_unregister_service(psm)
-        }
+        return self.pendingConnections.removeFirst()
     }
 }
 
@@ -135,13 +127,23 @@ internal func _l2cap_packet_handler(
         case HCI_EVENT_PACKET:
             switch UInt32(hci_event_packet_get_type(packetPointer)) {
                 case L2CAP_EVENT_INCOMING_CONNECTION:
-                    break
+                    let local_cid = l2cap_event_incoming_connection_get_local_cid(packetPointer)
+                    l2cap_accept_connection(local_cid)
                 case L2CAP_EVENT_CHANNEL_OPENED:
                     break
                 case L2CAP_EVENT_CHANNEL_CLOSED:
                     break
                 case L2CAP_EVENT_CAN_SEND_NOW:
                     break
+                case HCI_EVENT_DISCONNECTION_COMPLETE:
+                    l2cap.handle_HCI_EVENT_DISCONNECTION_COMPLETE(connection, buffer)
+                case HCI_EVENT_META_GAP:
+                    switch UInt32(hci_event_gap_meta_get_subevent_code(packetPointer)) {
+                        case GAP_SUBEVENT_LE_CONNECTION_COMPLETE:
+                        l2cap.handle_GAP_SUBEVENT_LE_CONNECTION_COMPLETE(connection, buffer)
+                        default:
+                            break
+                }
                 default:
                     break
             }
@@ -157,16 +159,32 @@ internal func _l2cap_packet_handler(
 internal extension L2CAP {
     
     func handle_L2CAP_DATA_PACKET(_ connection: UInt16, _ data: UnsafeBufferPointer<UInt8>) {
-        log?("L2CAP Packet, handle \(connection)")
+        log?("L2CAP Packet - Handle \(connection)")
         recieved(connection, data)
     }
     
     func handle_ATT_DATA_PACKET(_ connection: UInt16, _ data: UnsafeBufferPointer<UInt8>) {
-        log?("ATT Packet, handle \(connection)")
+        log?("ATT Packet - Handle \(connection)")
         guard data.isEmpty == false, let opcode = ATTOpcode(rawValue: data[0]) else {
             return
         }
         log?("ATT Opcode \(opcode)")
         recieved(connection, data)
+    }
+    
+    func handle_HCI_EVENT_DISCONNECTION_COMPLETE(_ connection: UInt16, _ data: UnsafeBufferPointer<UInt8>) {
+        guard let event = HCIDisconnectionComplete(data: Array(data.suffix(from: 2))) else {
+            assertionFailure()
+            return
+        }
+        log?("Disconnected - \(event)")
+        self.recievedData[event.handle] = nil
+        self.pendingConnections.removeAll(where: { $0 == event.handle })
+    }
+    
+    func handle_GAP_SUBEVENT_LE_CONNECTION_COMPLETE(_ connection: UInt16, _ data: UnsafeBufferPointer<UInt8>) {
+        let connectionHandle = gap_subevent_le_connection_complete_get_connection_handle(data.baseAddress)
+        log?("Connected - \(connectionHandle)")
+        pendingConnections.append(connectionHandle)
     }
 }

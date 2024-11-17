@@ -92,8 +92,6 @@ public extension HostController {
 }
 
 // packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
-@_documentation(visibility: internal)
-@_cdecl("bluetooth_packet_handler")
 internal func _bluetooth_packet_handler(packetType: UInt8, channel: UInt16, packetPointer: UnsafeMutablePointer<UInt8>?, packetSize: UInt16) {
     
     let hostController = HostController.default
