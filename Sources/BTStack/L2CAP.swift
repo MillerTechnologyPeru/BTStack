@@ -22,8 +22,6 @@ public final class L2CAP {
     
     internal fileprivate(set) var recievedData = [UInt16: [[UInt8]]]()
     
-    internal fileprivate(set) var pendingConnections = [UInt16]()
-    
     private init() {
         // Set up L2CAP and register L2CAP with HCI layer.
         l2cap_init()
@@ -96,36 +94,11 @@ public final class L2CAP {
     }
     
     public func canWrite(_ handle: UInt16) -> Bool {
-        /*
-        guard let channel = l2cap_fixed_channel_for_channel_id(handle) else {
-            assertionFailure()
-            return false
-        }
-        return channel.pointee.waiting_for_can_send_now != 0
-         */
-        return true
+        l2cap_can_send_packet_now(handle)
     }
     
-    public func write(_ buffer: UnsafeRawBufferPointer, connection handle: UInt16) throws(BTStackError) {
-        //try l2cap_send(handle, buffer.baseAddress, UInt16(buffer.count)).throwsError()
-        let dataPointer = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self)
-        try l2cap_send_connectionless(
-            handle,
-            UInt16(L2CAP_CID_ATTRIBUTE_PROTOCOL),
-            .init(mutating: dataPointer),
-            UInt16(buffer.count)
-        ).throwsError()
-    }
-    
-    public func canAccept() -> Bool {
-        pendingConnections.isEmpty == false
-    }
-    
-    public func accept() -> UInt16? {
-        guard canAccept() else {
-            return nil
-        }
-        return self.pendingConnections.removeFirst()
+    func write(_ buffer: UnsafeRawBufferPointer, connection handle: UInt16) throws(BTStackError) {
+        try l2cap_send(handle, buffer.baseAddress, UInt16(buffer.count)).throwsError()
     }
 }
 
@@ -193,12 +166,10 @@ internal extension L2CAP {
         }
         log?("Disconnected - \(event)")
         self.recievedData[event.handle] = nil
-        self.pendingConnections.removeAll(where: { $0 == event.handle })
     }
     
     func handle_GAP_SUBEVENT_LE_CONNECTION_COMPLETE(_ connection: UInt16, _ data: UnsafeBufferPointer<UInt8>) {
         let connectionHandle = gap_subevent_le_connection_complete_get_connection_handle(data.baseAddress)
         log?("Connected - \(connectionHandle)")
-        pendingConnections.append(connectionHandle)
     }
 }

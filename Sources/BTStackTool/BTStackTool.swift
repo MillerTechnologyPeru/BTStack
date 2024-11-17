@@ -30,7 +30,6 @@ struct BTStackTool {
         }
         
         hostController.log = { print("HCI:", $0) }
-        l2cap.log = { print("L2CAP:", $0) }
         peripheral.log = { print("Peripheral:", $0) }
         
         Thread.detachNewThread {

@@ -26,9 +26,9 @@ public final class BTStackPeripheral: PeripheralManager, @unchecked Sendable {
     /// Peripheral Advertising Options
     public typealias AdvertisingOptions = BTStackPeripheralAdvertisingOptions
     
-    public typealias Data = Socket.Connection.Data
+    public typealias Data = [UInt8]
     
-    public typealias Socket = L2CAP.Server
+    internal typealias Socket = BTStackPeripheral.L2CAP.Server
     
     // MARK: - Properties
     
@@ -339,8 +339,8 @@ internal extension BTStackPeripheral {
                 }
             }
             let newSocket = try socket.accept()
-            log?("[\(newSocket.address)]: New connection")
-            let central = Central(id: socket.address)
+            let central = Central(id: newSocket.address)
+            log?("[\(central)]: New connection")
             let connection = GATTServerConnection<Socket.Connection>(
                 central: central,
                 socket: newSocket,
@@ -434,7 +434,7 @@ public extension BTStackPeripheral {
         
         case library(BTStackError)
         case disconnected(Central)
-        case connection(ATTConnectionError<Socket.Connection.Error, Socket.Connection.Data>)
+        case connection(ATTConnectionError<BTStackError, [UInt8]>)
     }
 }
 
