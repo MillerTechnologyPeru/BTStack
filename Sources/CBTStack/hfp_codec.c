@@ -54,7 +54,7 @@
 // #define HFP_CODEC_TEST
 
 #ifdef ENABLE_HFP_WIDE_BAND_SPEECH
-#include "btstack_sbc.h"
+#include "classic/btstack_sbc.h"
 #define FRAME_SIZE_MSBC 57
 static void hfp_codec_encode_msbc(hfp_codec_t * hfp_codec, int16_t * pcm_samples);
 static void hfp_codec_encode_msbc_with_codec(hfp_codec_t * hfp_codec, int16_t * pcm_samples);

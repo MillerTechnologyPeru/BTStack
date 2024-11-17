@@ -50,8 +50,18 @@ let package = Package(
             ]
         ),
         .target(
-            name: "CBTStack"
-        ),
+            name: "CBTStack",
+            cSettings: [
+                .unsafeFlags(["-I", "/opt/homebrew/include/libusb-1.0"], .when(platforms: [.macOS]))
+            ]
+        ),/*
+        .systemLibrary(
+            name: "CLibUSB",
+            pkgConfig: "libusb-1.0",
+            providers: [
+                .aptItem(["libusb-1.0"]),
+                .brewItem(["libusb"])]
+        ),*/
         .testTarget(
             name: "BTStackTests",
             dependencies: ["BTStack"]
