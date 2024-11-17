@@ -10,13 +10,48 @@ import CBTStack
 
 public final class HostController {
     
-    nonisolated(unsafe) public static let shared = HostController()
+    public nonisolated(unsafe) static let `default` = HostController()
+    
+    // MARK: - Properties
     
     private var callbackRegistration = btstack_packet_callback_registration_t()
 
-    fileprivate(set) var state: State = .off
+    public internal(set) var state: State = .off
+    
+    public var isAdvertising = false {
+        didSet {
+            setAdvertisementState()
+        }
+    }
+    
+    public var advertisement = LowEnergyAdvertisingData() {
+        didSet {
+            setAdvertisementData()
+        }
+    }
+    
+    internal var advertisementBuffer = [UInt8]()
+    
+    public var scanResponse = LowEnergyAdvertisingData() {
+        didSet {
+            setScanResponse()
+        }
+    }
+    
+    internal var scanResponseBuffer = [UInt8]()
+    
+    // MARK: - Initialization
     
     private init() {
+        // init BTStack
+        #if os(macOS) || os(Linux)
+        btstack_memory_init()
+        var config = HCI_TRANSPORT_CONFIG_USB
+        let transport = hci_transport_usb_instance()
+        withUnsafeBytes(of: &config) {
+            hci_init(transport, $0.baseAddress)
+        }
+        #endif
         // register for callbacks
         callbackRegistration.callback = _bluetooth_packet_handler
         hci_add_event_handler(&callbackRegistration)
@@ -24,10 +59,19 @@ public final class HostController {
 
     deinit {
         hci_remove_event_handler(&callbackRegistration)
+        hci_deinit()
+    }
+    
+    // MARK: - Methods
+    
+    public func setPower(_ state: PowerState) {
+        hci_power_control(.init(rawValue: numericCast(state.rawValue)))
     }
 }
 
-extension HostController {
+// MARK: - Supporting Types
+
+public extension HostController {
 
     enum PowerState: UInt8, Sendable {
 
@@ -57,8 +101,12 @@ internal func _bluetooth_packet_handler(packetType: UInt8, channel: UInt16, pack
             switch hci_event_packet_get_type(packetPointer) {
                 case UInt8(BTSTACK_EVENT_STATE):
                     let rawState = btstack_event_state_get_state(packetPointer)
-                let newValue = HostController.State(rawValue: rawState) ?? .off
-                    HostController.shared.state = newValue
+                    let newValue = HostController.State(rawValue: rawState) ?? .off
+                    HostController.default.state = newValue
+                case UInt8(HCI_EVENT_TRANSPORT_USB_INFO):
+                    let vendor = hci_event_transport_usb_info_get_vendor_id(packetPointer)
+                    let product = hci_event_transport_usb_info_get_product_id(packetPointer)
+                    break
                 case UInt8(HCI_EVENT_VENDOR_SPECIFIC):
                     break
                 default:
