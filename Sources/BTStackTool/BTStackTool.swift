@@ -39,7 +39,7 @@ struct BTStackTool {
     static func start() throws(BTStackError) {
         
         let hostController = HostController.default
-        hostController.log = { print($0) }
+        hostController.log = { print("HCI:", $0) }
         try hostController.setPower(.on)
         
         // wait for Bluetooth to turn on
@@ -64,5 +64,14 @@ struct BTStackTool {
         hostController.isAdvertising = true
         
         print("Advertisment Name:", name.description)
+        
+        let l2cap = L2CAP.shared
+        l2cap.log = { print("L2CAP:", $0) }
+        l2cap.register(channel: 0x0004) // ATT
+        
+        
+        while true {
+            Thread.sleep(forTimeInterval: 1.0)
+        }
     }
 }

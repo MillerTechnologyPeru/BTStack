@@ -35,3 +35,12 @@ internal extension CInt {
         }
     }
 }
+
+internal extension UInt8 {
+    
+    func throwsError() throws(BTStackError) {
+        guard self == 0 else {
+            throw BTStackError(rawValue: numericCast(self))
+        }
+    }
+}

@@ -97,15 +97,24 @@ public extension HostController {
 internal func _bluetooth_packet_handler(packetType: UInt8, channel: UInt16, packetPointer: UnsafeMutablePointer<UInt8>?, packetSize: UInt16) {
     
     let hostController = HostController.default
-    switch packetType {
-        case UInt8(HCI_EVENT_PACKET):
-            switch hci_event_packet_get_type(packetPointer) {
-                case UInt8(BTSTACK_EVENT_STATE):
+    switch Int32(packetType) {
+        case HCI_EVENT_PACKET:
+            switch UInt32(hci_event_packet_get_type(packetPointer)) {
+                case BTSTACK_EVENT_STATE:
                     hostController.handle_BTSTACK_EVENT_STATE(packetType, channel, packetPointer, packetSize)
-                case UInt8(HCI_EVENT_TRANSPORT_USB_INFO):
+                case HCI_EVENT_TRANSPORT_USB_INFO:
                     hostController.handle_HCI_EVENT_TRANSPORT_USB_INFO(packetType, channel, packetPointer, packetSize)
-                case UInt8(HCI_EVENT_VENDOR_SPECIFIC):
+                case HCI_EVENT_DISCONNECTION_COMPLETE:
+                    hostController.handle_HCI_EVENT_DISCONNECTION_COMPLETE(packetType, channel, packetPointer, packetSize)
+                case HCI_EVENT_VENDOR_SPECIFIC:
                     break
+            case HCI_EVENT_META_GAP:
+                switch UInt32(hci_event_gap_meta_get_subevent_code(packetPointer)) {
+                case GAP_SUBEVENT_LE_CONNECTION_COMPLETE:
+                    hostController.handle_GAP_SUBEVENT_LE_CONNECTION_COMPLETE(packetType, channel, packetPointer, packetSize)
+                default:
+                    break
+                }
                 default:
                     break
             }
@@ -126,5 +135,25 @@ internal extension HostController {
         let vendor = hci_event_transport_usb_info_get_vendor_id(packetPointer)
         let product = hci_event_transport_usb_info_get_product_id(packetPointer)
         log?("USB Vendor \(vendor) Product \(product) ")
+    }
+    
+    func handle_GAP_SUBEVENT_LE_CONNECTION_COMPLETE(_ packetType: UInt8, _ channel: UInt16, _ packetPointer: UnsafeMutablePointer<UInt8>?, _ packetSize: UInt16) {
+        let connectionHandle = gap_subevent_le_connection_complete_get_connection_handle(packetPointer)
+        let connectionInterval = gap_subevent_le_connection_complete_get_conn_interval(packetPointer)
+        let connectionLatency = gap_subevent_le_connection_complete_get_conn_latency(packetPointer)
+        log?("LE Connection - Handle: \(connectionHandle)")
+        log?("LE Connection - Connection Interval: \(String(format: "%u.%02u", connectionInterval * 125 / 100, 25 * (connectionInterval & 3))) ms")
+        log?("LE Connection - Connection Latency:  \(connectionLatency)")
+    }
+    
+    func handle_HCI_EVENT_DISCONNECTION_COMPLETE(_ packetType: UInt8, _ channel: UInt16, _ packetPointer: UnsafeMutablePointer<UInt8>?, _ packetSize: UInt16) {
+        let connectionHandle = hci_event_disconnection_complete_get_connection_handle(packetPointer)
+        log?("LE Disconnection - Handle: \(connectionHandle)")
+        // re-enable advertising
+        if isAdvertising {
+            gap_discoverable_control(1)
+            gap_connectable_control(1)
+            gap_advertisements_enable(1)
+        }
     }
 }
