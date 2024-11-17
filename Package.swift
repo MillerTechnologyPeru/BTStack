@@ -7,6 +7,10 @@ let package = Package(
         .library(
             name: "BTStack",
             targets: ["BTStack"]
+        ),
+        .executable(
+            name: "BTStackTool",
+            targets: ["BTStackTool"]
         )
     ],
     dependencies: [
@@ -54,14 +58,22 @@ let package = Package(
             cSettings: [
                 .unsafeFlags(["-I", "/opt/homebrew/include/libusb-1.0"], .when(platforms: [.macOS]))
             ]
-        ),/*
+        ),
         .systemLibrary(
             name: "CLibUSB",
             pkgConfig: "libusb-1.0",
             providers: [
-                .aptItem(["libusb-1.0"]),
+                .aptItem(["libusb-dev"]),
                 .brewItem(["libusb"])]
-        ),*/
+        ),
+        .executableTarget(
+            name: "BTStackTool",
+            dependencies: [
+                "BTStack",
+                "CLibUSB"
+            ],
+            linkerSettings: [.unsafeFlags(["-L", "/opt/homebrew/lib/"], .when(platforms: [.macOS]))]
+        ),
         .testTarget(
             name: "BTStackTests",
             dependencies: ["BTStack"]
